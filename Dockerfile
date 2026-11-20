@@ -12,6 +12,8 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps python3 make g++
 COPY package.json package-lock.json* ./
+# npm runs the "prepare" script (git hook installer; a no-op without .git) - it must exist in the image.
+COPY scripts/git-hooks.mjs ./scripts/
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi \
     && apk del .build-deps
 
@@ -31,6 +33,8 @@ FROM node:22-alpine AS prod-deps
 WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps python3 make g++
 COPY package.json package-lock.json* ./
+# npm runs the "prepare" script (git hook installer; a no-op without .git) - it must exist in the image.
+COPY scripts/git-hooks.mjs ./scripts/
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
     && apk del .build-deps
 

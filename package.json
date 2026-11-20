@@ -30,6 +30,7 @@
     "docs:readme": "node scripts/docs-readme.mjs",
     "docs:check": "node scripts/docs-readme.mjs --check",
     "prepare": "node scripts/git-hooks.mjs install",
+    "lock:sync": "node scripts/lock-sync.mjs",
     "check:policy": "node scripts/check-policy.mjs"
   },
   "dependencies": {
