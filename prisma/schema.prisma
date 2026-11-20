@@ -1,0 +1,40 @@
+// Prisma schema - the single source of truth for the database structure.
+//
+// Workflow: edit models here -> `npm run db:migrate -- --name <change>` (creates a migration in
+// prisma/migrations and regenerates the client) -> commit schema + migration together.
+// CI / production apply migrations with `npm run db:deploy` (compose service "migrate").
+//
+// Conventions (see AGENTS-SENIOR-BACKEND-DB.md):
+// - Model names PascalCase singular; map tables/columns to snake_case with @@map / @map.
+// - Every FK indexed; unique constraints in the DB even when the app validates.
+// - Timestamps: DateTime @db.Timestamptz(3), UTC.
+// - Additive migrations first; destructive changes ship in two deploys.
+
+generator client {
+  provider      = "prisma-client"
+  output        = "../src/generated/prisma"
+  moduleFormat  = "cjs"                                   // project compiles to CommonJS (tsc + ts-jest)
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]  // Alpine runtime image
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Starter model required by the auth contract (contracts/conventions.md -> Auth contract).
+// Uncomment on the first implementation task, then run `npm run db:migrate -- --name init`.
+//
+// model User {
+//   id           String   @id @default(uuid()) @db.Uuid
+//   email        String   @unique
+//   passwordHash String   @map("password_hash")
+//   firstname    String
+//   lastname     String
+//   roleName     String   @map("role_name")
+//   status       String   @default("active")
+//   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+//   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+//
+//   @@index([roleName])
+//   @@map("users")
+// }
