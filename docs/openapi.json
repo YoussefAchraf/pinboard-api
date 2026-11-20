@@ -1,0 +1,53 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PinBoard API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "accessToken"
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error",
+          "code"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "VALIDATION_FAILED",
+              "UNAUTHENTICATED",
+              "INVALID_CREDENTIALS",
+              "FORBIDDEN",
+              "CSRF_INVALID",
+              "NOT_FOUND",
+              "CONFLICT",
+              "RATE_LIMITED",
+              "INTERNAL_ERROR"
+            ]
+          },
+          "details": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "paths": {}
+}

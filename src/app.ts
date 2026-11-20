@@ -1,63 +1,130 @@
 /**
  * FILE:   src/app.ts
  * LAYER:  composition root (may import every layer). Owns the APPLICATION WIRING, not the process.
- * STATUS: stub - compiles on the empty template; replace the body on first implementation.
+ * STATUS: implemented (task 001) - task 003 adds the auth adapters (unit of work, users repository,
+ *         security services), authMiddleware and the global csrfMiddleware.
  *
  * PURPOSE
  *   `buildApp()` is the dependency-injection container: it builds every SHARED adapter once,
  *   applies the global middleware chain, mounts the feature modules, and returns the app.
  *   Tests call it directly (no listening socket) - see tests/helpers/buildTestApp.ts.
  *
- * WHAT TO WRITE (in this order)
- *   export interface IBuildAppInput  { config: IEnv; logger: ILogger }
- *   export interface IBuildAppResult { app: Express; shared: ISharedDependencies;
- *                                      schedulers: Array<{ start(): void; stop(): Promise<void> | void }> }
- *   export async function buildApp({ config, logger }: IBuildAppInput): Promise<IBuildAppResult>
- *
- *   1. Shared adapters (each ONCE):
- *        database   = createDatabase({ url: config.database.url })        infrastructure/database/prismaClient
- *        redis      = new RedisClient({ url: config.redis.url }, logger); await redis.connect()
- *        unitOfWork = new PrismaUnitOfWork(database.prisma)
- *        users      = new PgUserRepository(database.prisma)
- *        security   = { passwordHasher: new PasswordHasher(), tokenService: new TokenService(config.jwt),
- *                       refreshTokenStore: new RefreshTokenStore(redis), csrf: new CsrfTokenService() }
- *        sendCommand = (...args: string[]) => redis.raw.call(args[0], ...args.slice(1))
- *        http       = { authMiddleware: authMiddleware({ verifyAccess: (t) => security.tokenService.verifyAccess(t) }),
- *                       validate, createRateLimiter: (o) => createRateLimiter({ ...o, sendCommand }) }
- *        shared: ISharedDependencies = { config, logger, database, redis, unitOfWork,
- *                                        repositories: { users }, security, http }
- *   2. Express app + global chain (order matters):
- *        app.disable('x-powered-by'); app.set('trust proxy', config.trustProxy)
- *        requestContextMiddleware() -> pinoHttp({ logger: logger.pino }) -> helmet()
- *        -> cors({ origin: config.cors.origins, credentials: true })
- *        -> express.json({ limit: config.requestBodyLimit }) -> cookieParser()
- *        -> sanitizeMiddleware({ skipFields: ['password'] })
- *   3. Mount unversioned modules (health) BEFORE the limiter, then:
- *        global limiter: createRateLimiter({ prefix: 'rl:global:', windowMs: 60_000, limit: 300, sendCommand })
- *        csrfMiddleware({ matches: (c, h) => security.csrf.matches(c, h), exemptPaths: ['/v1/auth/login'] })
- *        swagger: /api-docs.json + /api-docs (skip in production unless enabled)
- *        for (const create of featureModules) { const m = create(shared);
- *          app.use(m.versioned === false ? m.basePath || '/' : `/v1${m.basePath}`, m.router);
- *          schedulers.push(...(m.schedulers ?? [])) }
- *   4. notFoundMiddleware() then errorHandlerMiddleware({ logger, exposeDetails: config.nodeEnv !== 'production' }) - LAST.
- *   5. return { app, shared, schedulers }
+ * CHAIN (order matters)
+ *   requestContext -> pino-http -> unversioned modules (/health, /ready)
+ *   -> helmet -> cors (allow-list, credentials) -> express.json(limit) -> cookieParser -> sanitize
+ *   -> global limiter (rl:global:, 300/min per IP) -> /api-docs (not in production)
+ *   -> /v1/<module> routers -> notFound -> errorHandler (LAST)
  *
  * NEVER PUT HERE
  *   Route handlers, business rules, SQL, cache reads, feature-specific `new UseCase(...)`
  *   (those live in src/modules/<feature>Module.ts).
  *
  * USED BY
- *   src/server.ts                   `const { app, shared, schedulers } = await buildApp({ config, logger })`
- *   tests/helpers/buildTestApp.ts   same call with a test config, then supertest(app)
+ *   src/server.ts, tests/helpers/buildTestApp.ts
  */
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import express from 'express';
+import type { Express } from 'express';
+import helmet from 'helmet';
+import { pinoHttp } from 'pino-http';
+import type { RedisReply } from 'rate-limit-redis';
+import * as swaggerUi from 'swagger-ui-express';
+import type { IEnv } from './config/env';
+import { swaggerSpec } from './docs/swaggerDefinition';
+import type { ILogger } from './domain/interfaces/ILogger';
+import { RedisClient } from './infrastructure/cache/RedisClient';
+import { createDatabase } from './infrastructure/database/prismaClient';
+import type { PinoLogger } from './infrastructure/services/PinoLogger';
+import { errorHandlerMiddleware } from './interface/middlewares/errorHandlerMiddleware';
+import { notFoundMiddleware } from './interface/middlewares/notFoundMiddleware';
+import { createRateLimiter } from './interface/middlewares/rateLimiterMiddleware';
+import { requestContextMiddleware } from './interface/middlewares/requestContextMiddleware';
+import { sanitizeMiddleware } from './interface/middlewares/sanitizeMiddleware';
+import { validate } from './interface/middlewares/validateRequestMiddleware';
+import { featureModules } from './modules';
+import type { IScheduler, ISharedDependencies } from './modules/types';
 
-interface IBuildAppStubResult {
-  readonly stub: true;
+export interface IBuildAppInput {
+  config: IEnv;
+  logger: PinoLogger;
 }
 
-/** Temporary stub so tsc/lint/CI pass on the empty template. Replace per the header above. */
-function buildApp(): IBuildAppStubResult {
-  return { stub: true };
+export interface IBuildAppResult {
+  app: Express;
+  shared: ISharedDependencies;
+  schedulers: IScheduler[];
 }
 
-export { buildApp };
+export async function buildApp({ config, logger }: IBuildAppInput): Promise<IBuildAppResult> {
+  // 1. Shared adapters (each ONCE) ------------------------------------------------------------
+  const appLogger: ILogger = logger;
+  const database = createDatabase({ url: config.database.url });
+  const redis = new RedisClient({ url: config.redis.url }, appLogger);
+  try {
+    await redis.connect();
+  } catch (err) {
+    redis.raw.disconnect();
+    await database.disconnect();
+    throw err;
+  }
+
+  const sendCommand = (...args: string[]): Promise<RedisReply> =>
+    redis.raw.call(args[0] ?? '', ...args.slice(1)) as Promise<RedisReply>;
+
+  const shared: ISharedDependencies = {
+    config,
+    logger: appLogger,
+    database,
+    redis,
+    http: {
+      validate,
+      createRateLimiter: (options) => createRateLimiter({ ...options, sendCommand }),
+    },
+  };
+
+  const modules = featureModules.map((create) => create(shared));
+  const schedulers = modules.flatMap((m) => m.schedulers ?? []);
+
+  // 2. Express app + global chain ------------------------------------------------------------
+  const app = express();
+  app.disable('x-powered-by');
+  app.set('trust proxy', config.trustProxy);
+
+  app.use(requestContextMiddleware());
+  app.use(
+    pinoHttp({
+      logger: logger.pino,
+      genReqId: (_req, res) => String(res.getHeader('X-Request-Id')),
+    }),
+  );
+
+  // 3. Unversioned modules (health) BEFORE the limiter so probes are never throttled ------------
+  for (const m of modules.filter((mod) => mod.versioned === false)) {
+    app.use(m.basePath || '/', m.router);
+  }
+
+  app.use(helmet());
+  app.use(cors({ origin: config.cors.origins, credentials: true }));
+  app.use(express.json({ limit: config.requestBodyLimit }));
+  app.use(cookieParser());
+  app.use(sanitizeMiddleware({ skipFields: ['password'] }));
+  app.use(createRateLimiter({ prefix: 'rl:global:', windowMs: 60_000, limit: 300, sendCommand }));
+
+  if (config.nodeEnv !== 'production') {
+    app.get('/api-docs.json', (_req, res) => {
+      res.json(swaggerSpec);
+    });
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  }
+
+  for (const m of modules.filter((mod) => mod.versioned !== false)) {
+    app.use(`/v1${m.basePath}`, m.router);
+  }
+
+  // 4. 404 + error envelope - LAST -------------------------------------------------------------
+  app.use(notFoundMiddleware());
+  app.use(errorHandlerMiddleware({ logger: appLogger }));
+
+  return { app, shared, schedulers };
+}

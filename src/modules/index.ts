@@ -1,26 +1,26 @@
 /**
  * FILE:   src/modules/index.ts
  * LAYER:  composition root
- * STATUS: placeholder - implement in place; keep this header in sync with the real code.
+ * STATUS: implemented (task 001)
  *
  * PURPOSE
  *   The registry of feature modules, in mount order. The ONLY line that changes when a
- *   feature is added - app.ts itself stays untouched.
- *
- * WHAT TO WRITE
- *   export const featureModules: FeatureModuleFactory[] = [
- *     createHealthModule,   // unversioned, first
- *     createAuthModule,
- *     // createProjectModule, ...   <- one line per new feature
- *   ];
+ *   feature is added - app.ts itself stays untouched. Unversioned modules (health) are mounted
+ *   by app.ts before the global rate limiter, versioned ones after it under /v1.
  *
  * EXPORTS
  *   const featureModules
  *
  * USED BY
- *   src/app.ts   `for (const create of featureModules) { const m = create(shared); app.use(prefix(m), m.router) }`
+ *   src/app.ts
  *
  * MAY IMPORT
  *   ./types, ./*Module.
  */
-export {};
+import { createHealthModule } from './healthModule';
+import type { FeatureModuleFactory } from './types';
+
+export const featureModules: FeatureModuleFactory[] = [
+  createHealthModule,
+  // task 003: createAuthModule
+];

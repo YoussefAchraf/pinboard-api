@@ -1,47 +1,56 @@
 /**
  * FILE:   src/modules/types.ts
  * LAYER:  composition root (may import every layer; lives with app.ts / server.ts)
- * STATUS: placeholder - implement in place; keep this header in sync with the real code.
+ * STATUS: implemented (task 001) - task 003 extends ISharedDependencies with unitOfWork,
+ *         repositories, security and http.authMiddleware.
  *
  * PURPOSE
  *   The two contracts of the FEATURE MODULE pattern:
  *     - ISharedDependencies: everything app.ts builds ONCE and hands to every module
  *     - IFeatureModule:      what a module returns so app.ts can mount it
- *   This keeps app.ts short and stable: adding a feature = one new module file + one line
- *   in src/modules/index.ts (no merge conflicts between parallel agents in app.ts).
- *
- * WHAT TO WRITE
- *   export interface ISharedDependencies {
- *     config: IEnv;
- *     logger: ILogger;
- *     database: IDatabase;                     // prisma + probe
- *     redis: RedisClient;
- *     unitOfWork: IUnitOfWork;
- *     repositories: { users: IUserRepository };   // shared repository instances
- *     security: { passwordHasher: IPasswordHasher; tokenService: ITokenService;
- *                 refreshTokenStore: IRefreshTokenStore; csrf: CsrfTokenService };
- *     http: { authMiddleware: RequestHandler;
- *             validate: (schemas: IRequestSchemas) => RequestHandler;
- *             createRateLimiter: (o: Omit<IRateLimiterOptions, 'sendCommand'>) => RequestHandler };
- *   }
- *   export interface IFeatureModule {
- *     name: string;                 // 'auth'
- *     basePath: string;             // '/auth'  (app.ts prefixes '/v1' unless versioned === false)
- *     versioned?: boolean;          // false only for /health and /ready
- *     router: Router;
- *     schedulers?: Array<{ start(): void; stop(): Promise<void> | void }>;
- *   }
- *   export type FeatureModuleFactory = (deps: ISharedDependencies) => IFeatureModule;
+ *   Adding a feature = one new module file + one line in src/modules/index.ts.
+ *   `basePath` is prefixed with '/v1' by app.ts unless `versioned === false` (health only).
  *
  * EXPORTS
- *   interface ISharedDependencies, interface IFeatureModule, type FeatureModuleFactory
+ *   interface ISharedDependencies, interface IFeatureModule, interface IScheduler,
+ *   type FeatureModuleFactory
  *
  * USED BY
- *   src/modules/*Module.ts   implement FeatureModuleFactory
- *   src/modules/index.ts     typed module list
- *   src/app.ts               builds ISharedDependencies, mounts IFeatureModule[]
+ *   src/modules/*Module.ts, src/modules/index.ts, src/app.ts
  *
  * MAY IMPORT
  *   Every layer (types only here).
  */
-export {};
+import type { RequestHandler, Router } from 'express';
+import type { IEnv } from '../config/env';
+import type { ILogger } from '../domain/interfaces/ILogger';
+import type { RedisClient } from '../infrastructure/cache/RedisClient';
+import type { IDatabase } from '../infrastructure/database/prismaClient';
+import type { IRateLimiterOptions } from '../interface/middlewares/rateLimiterMiddleware';
+import type { IRequestSchemas } from '../interface/middlewares/validateRequestMiddleware';
+
+export interface ISharedDependencies {
+  config: IEnv;
+  logger: ILogger;
+  database: IDatabase;
+  redis: RedisClient;
+  http: {
+    validate: (schemas: IRequestSchemas) => RequestHandler;
+    createRateLimiter: (options: Omit<IRateLimiterOptions, 'sendCommand'>) => RequestHandler;
+  };
+}
+
+export interface IScheduler {
+  start(): void;
+  stop(): Promise<void> | void;
+}
+
+export interface IFeatureModule {
+  name: string;
+  basePath: string;
+  versioned?: boolean;
+  router: Router;
+  schedulers?: IScheduler[];
+}
+
+export type FeatureModuleFactory = (deps: ISharedDependencies) => IFeatureModule;
