@@ -8,7 +8,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-project
       - run: npm run lint
 
@@ -16,11 +16,11 @@ jobs:
     name: boundaries report
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-project
       - name: Architecture boundary violations
         run: npx eslint . --rule '{"boundaries/dependencies":"error"}' --format json --output-file boundaries-report.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: boundaries-report
           path: boundaries-report.json
@@ -30,8 +30,8 @@ jobs:
     name: docs (generated README sections are current)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       # Same script as `npm run docs:check` - fails when docs/ changed but README.md was not regenerated.
@@ -41,8 +41,8 @@ jobs:
     name: policy (no file-wide lint disables, no .only/.skip tests, no BOM)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       # Same script agents run locally (`npm run check:policy`).
@@ -52,7 +52,7 @@ jobs:
     name: typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-project
       - run: npx tsc --noEmit
 
@@ -60,7 +60,7 @@ jobs:
     name: sca
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-project
       - name: npm audit (report only)
         run: npm audit --omit=dev || true
@@ -69,10 +69,10 @@ jobs:
     name: secret-scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -97,7 +97,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-project
       - run: npm test -- --runInBand
         env:
@@ -113,7 +113,7 @@ jobs:
     name: openapi drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-project
       - name: Check committed spec is not stale
         run: |
