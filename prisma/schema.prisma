@@ -21,20 +21,34 @@ datasource db {
   provider = "postgresql"
 }
 
-// Starter model required by the auth contract (contracts/conventions.md -> Auth contract).
-// Uncomment on the first implementation task, then run `npm run db:migrate -- --name init`.
-//
-// model User {
-//   id           String   @id @default(uuid()) @db.Uuid
-//   email        String   @unique
-//   passwordHash String   @map("password_hash")
-//   firstname    String
-//   lastname     String
-//   roleName     String   @map("role_name")
-//   status       String   @default("active")
-//   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-//   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-//
-//   @@index([roleName])
-//   @@map("users")
-// }
+// User - contracts/domain-model.md section 2 (task 001: model + init migration only).
+// Email: stored lowercase (CHECK users_email_lowercase, added by hand in the init migration) + unique,
+// which makes uniqueness case-insensitive. Role and status are Postgres enums.
+
+enum RoleName {
+  admin
+  member
+
+  @@map("role_name")
+}
+
+enum UserStatus {
+  active
+  disabled
+
+  @@map("user_status")
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique @db.VarChar(254)
+  passwordHash String     @map("password_hash")
+  firstname    String     @db.VarChar(100)
+  lastname     String     @db.VarChar(100)
+  roleName     RoleName   @default(member) @map("role_name")
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("users")
+}
