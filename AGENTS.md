@@ -177,6 +177,7 @@ npm install && npx prisma generate
 docker compose up -d postgres redis          # local infra
 npm run dev                                  # http://localhost:4000/health
 npm run db:migrate -- --name <change>        # create + apply a migration (dev)
+npm run lock:sync                            # after ANY dependency change (Linux lockfile, needs Docker) - PROTOCOL 5.2
 npm run verify                               # LOCAL PIPELINE: lint + typecheck + tests - mandatory before every push
 npm run docs:export                          # refresh docs/openapi.json (commit it) whenever routes change
 docker compose --profile dev up backend-dev  # containerized hot reload on :4002
