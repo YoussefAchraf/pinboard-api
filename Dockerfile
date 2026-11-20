@@ -8,7 +8,7 @@
 #   runtime    minimal non-root image: node dist/server.js. No process manager: the container
 #              runtime restarts the process; compose sets `init: true` for signal handling.
 
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps python3 make g++
 COPY package.json package-lock.json* ./
@@ -27,14 +27,14 @@ COPY prisma ./prisma
 COPY src ./src
 RUN npx prisma generate && npm run build
 
-FROM node:22-alpine AS prod-deps
+FROM node:26-alpine AS prod-deps
 WORKDIR /app
 RUN apk add --no-cache --virtual .build-deps python3 make g++
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi \
     && apk del .build-deps
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apk upgrade --no-cache \
