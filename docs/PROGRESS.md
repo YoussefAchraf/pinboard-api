@@ -35,3 +35,15 @@ Agent-assisted work is logged here per session. Append entries; never rewrite pa
   booted: /health 200, /ready 200, /v1/x 404 envelope. Invalid env -> exit 1 with key list. SIGTERM in a Linux
   container -> server.stopping / server.stopped, exit 0. Local infra on host ports 55432/56379 (5432/6379 taken
   by other projects on this machine).
+
+## 2026-11-21 — task 005 CI applies Prisma migrations before tests
+- **Done:** `.github/workflows/verify.yml` job `test`: `DATABASE_URL` moved to job-level `env` (same CI-only
+  placeholder value); new step `npm run db:deploy` before `npm test -- --runInBand`. README CI/CD line updated.
+- **Decisions:** job-level `DATABASE_URL` (defined once, used by migrate and test steps); other test env stays on
+  the test step.
+- **Deferred:** none.
+- **Validation:** `npm run verify` green (8 suites / 47 tests). Local reproduction: empty DB `pinboard_ci_check` +
+  `DATABASE_URL=<that db> npm run db:deploy` -> `init` applied, `users` exists (env var wins over `.env`). CI on
+  PR #9: run 44876607280 (pull_request) and 44876589708 (push) green; `verify / test` log shows
+  `Applying migration 20261120140746_init` / `All migrations have been successfully applied.` before
+  `Tests: 47 passed, 47 total`.
