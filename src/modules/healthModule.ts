@@ -1,30 +1,31 @@
 /**
  * FILE:   src/modules/healthModule.ts
  * LAYER:  composition root (may import every layer)
- * STATUS: placeholder - implement in place; keep this header in sync with the real code.
+ * STATUS: implemented (task 001)
  *
  * PURPOSE
- *   Wires /health (liveness) and /ready (readiness) with every critical dependency's probe.
- *
- * WHAT TO WRITE
- *   export const createHealthModule: FeatureModuleFactory = (deps) => ({
- *     name: 'health',
- *     basePath: '',
- *     versioned: false,          // mounted at the root, not under /v1
- *     router: healthRoutes({
- *       healthController: new HealthController({ probes: [deps.database.probe, deps.redis.probe] }),
- *     }),
- *   });
- *   - When an optional module adds a critical dependency (e.g. an SMTP relay the app cannot
- *     work without), add its probe here.
+ *   Wires /health (liveness) and /ready (readiness) with every critical dependency's probe
+ *   (postgres, redis). Unversioned: mounted at the root by app.ts, before the global limiter.
+ *   When an optional module adds a critical dependency, add its probe here.
  *
  * EXPORTS
  *   const createHealthModule
  *
  * USED BY
- *   src/modules/index.ts (FIRST in the list, mounted before rate limiting by app.ts)
+ *   src/app.ts (mounted before the global rate limiter)
  *
  * MAY IMPORT
  *   ./types, interface/controllers/HealthController, interface/routes/healthRoutes.
  */
-export {};
+import type { FeatureModuleFactory } from './types';
+import { HealthController } from '../interface/controllers/HealthController';
+import { healthRoutes } from '../interface/routes/healthRoutes';
+
+export const createHealthModule: FeatureModuleFactory = (deps) => ({
+  name: 'health',
+  basePath: '',
+  versioned: false,
+  router: healthRoutes({
+    healthController: new HealthController({ probes: [deps.database.probe, deps.redis.probe] }),
+  }),
+});

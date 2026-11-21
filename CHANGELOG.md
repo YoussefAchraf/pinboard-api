@@ -8,3 +8,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   sets `since:` on the released feature pages, and runs `npm run docs:readme`.
 
 ## [Unreleased]
+
+### Added
+
+- API platform foundation: validated config, pino logging with request ids, error envelope, Postgres + Redis adapters with `/health` and `/ready`, Redis-backed rate limiting, `users` table migration (001)

@@ -1,37 +1,62 @@
 /**
  * FILE:   src/domain/errors/AppError.ts
  * LAYER:  domain (pure - no framework imports, no process.env, no console)
- * STATUS: placeholder - implement in place; keep this header in sync with the real code.
+ * STATUS: implemented (task 001)
  *
  * PURPOSE
  *   The single error type every layer throws for EXPECTED failures. The global error
- *   handler turns it into the cross-stack envelope `{ error, code }`
- *   (contracts/conventions.md -> Error envelope).
- *
- * WHAT TO WRITE
- *   class AppError extends Error {
- *     readonly status: number;          // HTTP status to respond with (4xx for expected errors)
- *     readonly code: ErrorCode;         // machine-readable, from ./errorCodes
- *     readonly details?: unknown;       // optional, safe-to-expose context (e.g. field errors)
- *     constructor(code: ErrorCode, message: string, status: number, details?: unknown)
- *   }
- *   - Set `this.name = 'AppError'` and keep the prototype chain correct
- *     (Object.setPrototypeOf(this, AppError.prototype)) so `instanceof` works after tsc.
- *   - Optional static helpers for the common cases keep call sites short:
- *       AppError.notFound(msg), AppError.unauthorized(msg), AppError.forbidden(msg),
- *       AppError.conflict(msg), AppError.validation(msg, details)
- *   - Do NOT create ad-hoc subclasses per feature; add a code to errorCodes.ts instead.
+ *   handler turns it into the cross-stack envelope `{ error, code, details? }`
+ *   (contracts/conventions.md section 2).
+ *   Do NOT create ad-hoc subclasses per feature; add a code to errorCodes.ts instead.
  *
  * EXPORTS
- *   class AppError
+ *   class AppError (constructor(code, message, status, details?) + static helpers)
  *
  * USED BY
- *   use-cases/**                                   `throw AppError.unauthorized('Invalid credentials')`
- *   domain/entities/**                             invariant violations
- *   interface/middlewares/errorHandlerMiddleware.ts `if (err instanceof AppError) -> res.status(err.status).json({ error: err.message, code: err.code })`
- *   interface/middlewares/validateRequestMiddleware.ts zod failure -> AppError.validation(...)
+ *   use-cases/**, domain/entities/**, interface/middlewares/{errorHandler,validateRequest,
+ *   notFound,rateLimiter}Middleware.ts
  *
  * MAY IMPORT
  *   ./errorCodes only.
  */
-export {};
+import { ERROR_CODES } from './errorCodes';
+import type { ErrorCode } from './errorCodes';
+
+export class AppError extends Error {
+  readonly code: ErrorCode;
+  readonly status: number;
+  readonly details?: unknown;
+
+  constructor(code: ErrorCode, message: string, status: number, details?: unknown) {
+    super(message);
+    this.name = 'AppError';
+    this.code = code;
+    this.status = status;
+    this.details = details;
+    Object.setPrototypeOf(this, AppError.prototype);
+  }
+
+  static validation(message: string, details?: unknown, status = 422): AppError {
+    return new AppError(ERROR_CODES.VALIDATION_FAILED, message, status, details);
+  }
+
+  static unauthorized(message = 'Authentication required'): AppError {
+    return new AppError(ERROR_CODES.UNAUTHENTICATED, message, 401);
+  }
+
+  static forbidden(message = 'Forbidden'): AppError {
+    return new AppError(ERROR_CODES.FORBIDDEN, message, 403);
+  }
+
+  static notFound(message = 'Not found'): AppError {
+    return new AppError(ERROR_CODES.NOT_FOUND, message, 404);
+  }
+
+  static conflict(message = 'Conflict'): AppError {
+    return new AppError(ERROR_CODES.CONFLICT, message, 409);
+  }
+
+  static internal(message = 'Internal server error'): AppError {
+    return new AppError(ERROR_CODES.INTERNAL_ERROR, message, 500);
+  }
+}

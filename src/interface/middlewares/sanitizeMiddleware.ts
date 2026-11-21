@@ -1,19 +1,14 @@
 /**
  * FILE:   src/interface/middlewares/sanitizeMiddleware.ts
  * LAYER:  interface (HTTP delivery; may import express; never prisma / ioredis / process.env)
- * STATUS: placeholder - implement in place; keep this header in sync with the real code.
+ * STATUS: implemented (task 001)
  *
  * PURPOSE
- *   Defense in depth against stored XSS: strips HTML from incoming string fields. zod
- *   validation remains the primary input contract; output encoding is the frontend's job.
- *
- * WHAT TO WRITE
- *   export function sanitizeMiddleware(options?: { skipFields?: string[] }): RequestHandler
- *     -> recursively walk req.body (objects/arrays, bounded depth, e.g. 10) and replace every
- *        string with xss.filterXSS(value, { whiteList: {}, stripIgnoreTag: true, stripIgnoreTagBody: ['script'] })
- *     -> never touch fields listed in skipFields (e.g. 'password' - must reach the hasher unchanged)
- *   - Do NOT mutate req.query in Express 5 (it is a getter); sanitize the body only and
- *     validate query/params with zod.
+ *   Defense in depth against stored XSS: strips HTML from every string in req.body (objects and
+ *   arrays, depth <= 10; deeper values are left untouched). zod validation remains the primary
+ *   input contract; output encoding is the frontend's job.
+ *   - Fields named in `skipFields` (any depth, e.g. 'password') are never touched.
+ *   - req.query is NOT mutated (read-only getter in Express 5); query/params are validated with zod.
  *
  * EXPORTS
  *   function sanitizeMiddleware
@@ -24,4 +19,30 @@
  * MAY IMPORT
  *   express (types), xss.
  */
-export {};
+import type { RequestHandler } from 'express';
+import { FilterXSS } from 'xss';
+
+const MAX_DEPTH = 10;
+
+const filter = new FilterXSS({ whiteList: {}, stripIgnoreTag: true, stripIgnoreTagBody: ['script'] });
+
+function sanitizeValue(value: unknown, skip: ReadonlySet<string>, depth: number): unknown {
+  if (typeof value === 'string') return filter.process(value);
+  if (depth >= MAX_DEPTH || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => sanitizeValue(item, skip, depth + 1));
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    output[key] = skip.has(key) ? item : sanitizeValue(item, skip, depth + 1);
+  }
+  return output;
+}
+
+export function sanitizeMiddleware(options: { skipFields?: string[] } = {}): RequestHandler {
+  const skip = new Set(options.skipFields ?? []);
+  return (req, _res, next) => {
+    if (req.body !== undefined && req.body !== null) {
+      req.body = sanitizeValue(req.body, skip, 0);
+    }
+    next();
+  };
+}
