@@ -3,19 +3,19 @@
 Rewritten at the end of every backend session (rules: `../../agents/PROTOCOL.md` section 6).
 This is the backend agent's memory across sessions and AI tools. Never store secrets or personal data.
 
-## 1. Snapshot (2026-11-20)
+## 1. Snapshot (2026-11-21)
 
-Task 001 (API platform foundation) implemented on `feature/001-api-platform-foundation`, PR into `dev` open,
-status `review` (manager merges - no auto-merge token). Working: `buildApp()` chain, /health, /ready, 404 envelope,
-Redis rate limiter, `users` table (`init` migration). `npm run verify` green locally (8 suites, 47 tests).
-Next: task 003 (auth API) once the manager marks it ready.
+Task 001 merged into `dev` (e81f858). Task 005 (CI migrate before tests) done on `ci/005-migrate-before-tests`,
+PR #9 into `dev` open, CI green, status `review` (manager merges - no auto-merge token). `npm run verify` green
+locally (8 suites, 47 tests). Next: task 003 (auth API) - start only after 005 is merged.
 
 ## 2. Active work
 
-- 001: `review` - wait for the manager's review in `../../contracts/tasks/001-be-api-platform-foundation.md`.
+- 005: `review` - wait for the manager's review in `../../contracts/tasks/005-be-ci-migrate-before-tests.md`.
   If `changes-requested`: fix on the same branch, `git merge origin/dev` if behind, re-run verify, push.
-- Next task 003 extends `ISharedDependencies` (unitOfWork, repositories.users, security, http.authMiddleware),
-  adds csrfMiddleware to `app.ts` after the global limiter, passes `key: (req) => req.auth?.userId` to limiters.
+- Next task 003 (after 005 merged): branch from fresh `origin/dev`; extends `ISharedDependencies` (unitOfWork,
+  repositories.users, security, http.authMiddleware), adds csrfMiddleware to `app.ts` after the global limiter,
+  passes `key: (req) => req.auth?.userId` to limiters; also delivers ADR 0006 (be-001 lint policy).
 
 ## 3. Project knowledge
 
@@ -24,8 +24,9 @@ Next: task 003 (auth API) once the manager marks it ready.
   DATABASE_URL/REDIS_URL there. CI uses its own service containers (DB `pinboard_test`, Redis db 1, no password).
 - Tests: `tests/helpers/buildTestApp.ts` loads `.env` via dotenv (quiet) and takes only DATABASE_URL/REDIS_URL from
   it; everything else is TEST_ENV. Smoke/e2e need Postgres + Redis up.
-- CI `test` job does NOT run `prisma migrate deploy`: tests that touch `users` (task 003) need a migration step
-  (or a globalSetup) - plan it in task 003.
+- CI `test` job (task 005): job-level `DATABASE_URL`, step `npm run db:deploy` runs before `npm test -- --runInBand`,
+  so the CI DB has every committed migration. A new migration is applied in CI automatically.
+- Python is not installed on this machine (Git Bash); use node or the Edit tool for scripted edits.
 - `users`: role/status are Postgres enums (`role_name`, `user_status`); email lowercase enforced by CHECK
   `users_email_lowercase` + unique index; names non-empty CHECKs. CHECKs are hand-written in the migration SQL.
 - `/health` and `/ready` are not in `docs/openapi.json`; feature page `platform.md` therefore has empty `endpoints:`
@@ -40,6 +41,7 @@ express-rate-limit 8.7.5, rate-limit-redis 6.0.2, zod 4.6.7, pino 10.4.0, pino-h
 jest 30.5.2, dotenv 17.4.2, xss 1.0.17, helmet 8.3.0, cors 2.8.6, supertest 7.3.2. pino-pretty NOT installed.
 
 - prisma 7.10.1 - `prisma.config.ts` with `defineConfig` + `datasource.url`; generator `prisma-client`, cjs - verified: generate OK.
+- prisma 7.10.1 - CLI reads the URL from `prisma.config.ts` (`process.env['DATABASE_URL']` after `import 'dotenv/config'`); `schema.prisma` datasource has no url. A `DATABASE_URL` already in the process env wins over `.env` (dotenv does not override); no `.env` in CI, so the job env is used - verified: local `DATABASE_URL=<empty db> npm run db:deploy` applied `init` to that db, and CI log `Datasource "db": ... "pinboard_test"` (run 44876607280).
 - prisma 7.10.1 - CHECK constraints added by hand to a migration are ignored by `migrate dev` diffing (no drift) - verified: second `migrate dev` "Already in sync".
 - @prisma/adapter-pg 7.10.1 - `new PrismaPg(pool | poolConfig | connectionString, options?)` - verified: dist d.ts + running /ready.
 - express-rate-limit 8.7.5 - sets `Retry-After` itself before calling `handler` when standard/legacy headers are on; custom `keyGenerator` whose source mentions `req.ip` must call `ipKeyGenerator` (else throws ERR_ERL_KEY_GEN_IPV6 at creation); `passOnStoreError` default false - verified: dist/index.cjs + e2e 429 test.
@@ -74,6 +76,6 @@ jest 30.5.2, dotenv 17.4.2, xss 1.0.17, helmet 8.3.0, cors 2.8.6, supertest 7.3.
 
 ## 7. Waiting on
 
-- `../../contracts/requests/be-001-decision-lint-composition-root-policy.md` - open (non-blocking; line-scoped
-  disable in `src/server.ts` until resolved).
-- Manager review + merge of the task 001 PR.
+- `../../contracts/requests/be-001-decision-lint-composition-root-policy.md` - scheduled (ADR 0006, delivered in
+  task 003: add the composition-root file->file policy, remove the line-scoped disable in `src/server.ts`).
+- Manager review + merge of PR #9 (task 005).

@@ -172,8 +172,8 @@ Conventions: [tests/README.md](tests/README.md).
 
 - One branch per task: `feature/`, `fix/`, `refactor/`, `perf/`, `test/`, `docs/`, `chore/`, `ci/` from `dev`;
   `hotfix/` from `main`. Commits: `type(<task>): summary`.
-- Push to a work branch: **verify** (lint, typecheck, tests with PostgreSQL + Redis, boundaries report,
-  dependency audit, secret scan, OpenAPI drift, README docs check), then a PR into `dev` with auto-merge.
+- Push to a work branch: **verify** (lint, typecheck, tests with PostgreSQL + Redis after
+  `prisma migrate deploy`, boundaries report, dependency audit, secret scan, OpenAPI drift, README docs check), then a PR into `dev` with auto-merge.
 - Pull requests: verify + Docker build and Trivy scan. `main`: verify + image published to GHCR
   (`sha-<commit>`, `latest`, semver tags). Weekly CodeQL. `dev` -> `main` promotion is a manual workflow.
 
